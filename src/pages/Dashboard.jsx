@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   IndianRupee,
@@ -19,13 +19,34 @@ import { OrderDetailsModal } from '../components/orders/OrderDetailsModal';
 import { ProductFormModal } from '../components/products/ProductFormModal';
 import { useOrderStore } from '../store/useOrderStore';
 import { useProductStore } from '../store/useProductStore';
+import { supabase } from '../services/supabaseClient';
 import { toast } from 'sonner';
 
 export function Dashboard() {
-  const { orders, getStats, updateOrderStatus, updateShippingInfo } = useOrderStore();
-  const { products, addProduct } = useProductStore();
+  const { orders, getStats, fetchOrders, updateOrderStatus, updateShippingInfo } = useOrderStore();
+  const { products, addProduct, fetchProducts } = useProductStore();
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [clientCount, setClientCount] = useState(0);
+
+  useEffect(() => {
+    if (fetchProducts) fetchProducts();
+    if (fetchOrders) fetchOrders();
+
+    async function loadClientCount() {
+      try {
+        const { count, error } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true });
+        if (!error && typeof count === 'number') {
+          setClientCount(count);
+        }
+      } catch (err) {
+        console.warn('Failed to load client count:', err);
+      }
+    }
+    loadClientCount();
+  }, [fetchProducts, fetchOrders]);
 
   const stats = getStats();
   const inStockCount = products.filter((p) => p.stockStatus === 'In Stock').length;
@@ -78,16 +99,16 @@ export function Dashboard() {
         <StatCard
           title="Total Gross Revenue"
           value={`₹${stats.totalRevenue.toLocaleString()}`}
-          change="+18.4% this month"
+          change={stats.totalOrders > 0 ? `${stats.totalOrders} total orders` : "Prepaid & Settled"}
           icon={IndianRupee}
           note="Prepaid & Settled"
         />
         <StatCard
           title="All Customer Orders"
           value={stats.totalOrders}
-          change="+12 today"
+          change={stats.totalOrders > 0 ? `${stats.totalOrders} total` : "No orders yet"}
           icon={ShoppingBag}
-          note={`${stats.pendingOrders} pending verification`}
+          note={stats.pendingOrders > 0 ? `${stats.pendingOrders} pending verification` : 'All settled'}
         />
         <StatCard
           title="Active Check Designs"
@@ -98,10 +119,10 @@ export function Dashboard() {
         />
         <StatCard
           title="Atelier Clients"
-          value="1,420"
-          change="+64 new signups"
+          value={clientCount.toLocaleString()}
+          change={clientCount > 0 ? `${clientCount} registered` : "No patrons yet"}
           icon={Users}
-          note="94% satisfaction score"
+          note="Registered customer profiles"
         />
       </div>
 
@@ -129,7 +150,7 @@ export function Dashboard() {
 
         <div className="p-3 border-r border-black/10 dark:border-white/10 last:border-0">
           <div className="flex items-center gap-2 text-stone-400 text-[10px] font-bold uppercase tracking-wider">
-            <Truck className="w-3 h-3 text-blue-500" />
+            <Truck className="w-3 h-3 text-indigo-500" />
             <span>In Transit</span>
           </div>
           <p className="font-serif text-xl sm:text-2xl mt-1 text-black dark:text-white">
@@ -147,7 +168,7 @@ export function Dashboard() {
           </p>
         </div>
 
-        <div className="p-3 last:border-0">
+        <div className="p-3">
           <div className="flex items-center gap-2 text-stone-400 text-[10px] font-bold uppercase tracking-wider">
             <AlertCircle className="w-3 h-3 text-rose-500" />
             <span>Cancelled</span>
@@ -158,11 +179,11 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Orders & Top Selling Checkered Shirts */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Recent Orders Table (8 cols) */}
-        <div className="lg:col-span-8 bg-white dark:bg-[#121212] border border-black/10 dark:border-white/10 p-6">
-          <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10 mb-4">
+      {/* Main Dual Grid: Recent Orders & Top Check Products */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Dispatches / Recent Orders Column (8 cols) */}
+        <div className="lg:col-span-8 bg-white dark:bg-[#121212] border border-black/10 dark:border-white/10 p-6 space-y-4">
+          <div className="pb-3 border-b border-black/10 dark:border-white/10 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-stone-400 block">
                 Dispatches
@@ -190,37 +211,45 @@ export function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-white/5 font-light">
-                {orders.slice(0, 5).map((ord) => (
-                  <tr key={ord.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                    <td className="py-3 font-mono font-bold text-black dark:text-white">
-                      {ord.id}
-                    </td>
-                    <td className="py-3">
-                      <p className="font-medium text-black dark:text-white">{ord.customer?.name}</p>
-                      <p className="text-[10px] text-stone-400 truncate max-w-[140px]">
-                        {ord.customer?.email}
-                      </p>
-                    </td>
-                    <td className="py-3 text-stone-500">
-                      {ord.items?.length} {ord.items?.length === 1 ? 'shirt' : 'shirts'}
-                    </td>
-                    <td className="py-3 font-mono font-bold text-black dark:text-white">
-                      ₹{ord.total?.toLocaleString()}
-                    </td>
-                    <td className="py-3">
-                      <StatusBadge status={ord.status} />
-                    </td>
-                    <td className="py-3 text-right">
-                      <button
-                        onClick={() => setSelectedOrder(ord)}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider underline hover:opacity-75"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Inspect</span>
-                      </button>
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="py-8 text-center text-stone-400 text-xs">
+                      No customer orders recorded in database yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  orders.slice(0, 5).map((ord) => (
+                    <tr key={ord.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                      <td className="py-3 font-mono font-bold text-black dark:text-white">
+                        {ord.id}
+                      </td>
+                      <td className="py-3">
+                        <p className="font-medium text-black dark:text-white">{ord.customer?.name}</p>
+                        <p className="text-[10px] text-stone-400 truncate max-w-[140px]">
+                          {ord.customer?.email}
+                        </p>
+                      </td>
+                      <td className="py-3 text-stone-500">
+                        {ord.items?.length} {ord.items?.length === 1 ? 'shirt' : 'shirts'}
+                      </td>
+                      <td className="py-3 font-mono font-bold text-black dark:text-white">
+                        ₹{ord.total?.toLocaleString()}
+                      </td>
+                      <td className="py-3">
+                        <StatusBadge status={ord.status} />
+                      </td>
+                      <td className="py-3 text-right">
+                        <button
+                          onClick={() => setSelectedOrder(ord)}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider underline hover:opacity-75"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Inspect</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -231,9 +260,9 @@ export function Dashboard() {
           <div className="pb-3 border-b border-black/10 dark:border-white/10 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-stone-400 block">
-                Best Sellers
+                Catalog Allocation
               </span>
-              <h3 className="font-serif text-lg font-normal">Top Check Shirts</h3>
+              <h3 className="font-serif text-lg font-normal">Active Check Shirts</h3>
             </div>
             <Link
               to="/products"
@@ -244,49 +273,58 @@ export function Dashboard() {
           </div>
 
           <div className="space-y-3.5">
-            {products.slice(0, 5).map((p) => (
-              <div key={p.id} className="flex items-center gap-3 p-2 border border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/20 transition-all">
-                <img
-                  src={p.thumbnail}
-                  alt={p.name}
-                  className="w-12 h-14 object-cover bg-stone-100 dark:bg-stone-800"
-                />
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-xs font-medium truncate text-black dark:text-white">
-                    {p.name}
-                  </h4>
-                  <p className="text-[10px] text-stone-400 uppercase tracking-wider mt-0.5">
-                    {p.category} • {p.collection}
-                  </p>
-                  <p className="font-mono text-xs font-bold text-black dark:text-white mt-1">
-                    ₹{p.price.toLocaleString()}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <StatusBadge status={p.stockStatus} />
-                  <p className="text-[10px] text-stone-400 mt-1 font-mono">{p.stock} pcs</p>
-                </div>
+            {products.length === 0 ? (
+              <div className="py-8 text-center text-stone-400 text-xs">
+                No active check shirts in catalog yet.
               </div>
-            ))}
+            ) : (
+              products.slice(0, 5).map((p) => (
+                <div key={p.id} className="flex items-center gap-3 p-2 border border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/20 transition-all">
+                  <img
+                    src={p.thumbnail}
+                    alt={p.name}
+                    className="w-12 h-14 object-cover bg-stone-100 dark:bg-stone-800"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-xs font-medium truncate text-black dark:text-white">
+                      {p.name}
+                    </h4>
+                    <p className="text-[10px] text-stone-400 font-mono">
+                      {p.sku} • ₹{p.price.toLocaleString()}
+                    </p>
+                    <p className="text-[10px] text-stone-400">
+                      {p.stock} units available
+                    </p>
+                  </div>
+                  <StatusBadge status={p.stockStatus} />
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
 
-      {/* Order Details Modal */}
-      <OrderDetailsModal
-        isOpen={Boolean(selectedOrder)}
-        onClose={() => setSelectedOrder(null)}
-        order={selectedOrder}
-        onUpdateStatus={handleUpdateStatus}
-        onUpdateShipping={handleUpdateShipping}
-      />
+      {/* Inspect Order Modal */}
+      {selectedOrder && (
+        <OrderDetailsModal
+          order={selectedOrder}
+          isOpen={!!selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onUpdateStatus={handleUpdateStatus}
+          onUpdateShipping={handleUpdateShipping}
+        />
+      )}
 
-      {/* Add Product Modal */}
-      <ProductFormModal
-        isOpen={isAddProductOpen}
-        onClose={() => setIsAddProductOpen(false)}
-        onSave={handleAddProduct}
-      />
+      {/* Quick Add Product Modal */}
+      {isAddProductOpen && (
+        <ProductFormModal
+          isOpen={isAddProductOpen}
+          onClose={() => setIsAddProductOpen(false)}
+          onSave={handleAddProduct}
+        />
+      )}
     </div>
   );
 }
+
+export default Dashboard;

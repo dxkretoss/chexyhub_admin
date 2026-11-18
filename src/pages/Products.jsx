@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 export function Products() {
   const {
     products,
+    loading,
+    fetchProducts,
     addProduct,
     updateProduct,
     deleteProduct,
@@ -26,6 +28,12 @@ export function Products() {
     toggleBestSeller,
     resetToDefault
   } = useProductStore();
+
+  React.useEffect(() => {
+    if (fetchProducts) {
+      fetchProducts();
+    }
+  }, [fetchProducts]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -171,7 +179,16 @@ export function Products() {
               {filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="py-12 text-center text-stone-400">
-                    No checkered shirts matched your search criteria.
+                    {loading ? (
+                      <span className="font-mono text-xs uppercase tracking-widest animate-pulse">
+                        Synchronizing live catalog with Supabase...
+                      </span>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs uppercase tracking-wider text-black dark:text-white font-medium">No products in Supabase catalog.</p>
+                        <p className="text-[11px] text-stone-400">Click &quot;New Allocation&quot; above to create a piece with image upload.</p>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (

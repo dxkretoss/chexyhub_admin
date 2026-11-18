@@ -18,8 +18,12 @@ import { toast } from 'sonner';
 const STATUS_TABS = ['All', 'Pending', 'Processing', 'In Transit', 'Delivered', 'Cancelled'];
 
 export function Orders() {
-  const { orders, updateOrderStatus, updateShippingInfo, deleteOrder } = useOrderStore();
+  const { orders, loading, fetchOrders, updateOrderStatus, updateShippingInfo, deleteOrder } = useOrderStore();
   const [selectedStatusTab, setSelectedStatusTab] = useState('All');
+
+  React.useEffect(() => {
+    if (fetchOrders) fetchOrders();
+  }, [fetchOrders]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [deletingOrder, setDeletingOrder] = useState(null);
